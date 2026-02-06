@@ -75,7 +75,7 @@ async def honeypot_endpoint(
     
     if scam_detected or already_detected or len(request.conversationHistory) > 0:
         history = get_history(session_id)
-        reply = generate_agent_reply(history)
+        reply = generate_agent_reply(history, session_id)
         
         add_message(session_id, "user", reply)
         
