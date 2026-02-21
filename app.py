@@ -21,8 +21,8 @@ Architecture:
 
 import os
 import logging
-from fastapi import FastAPI, Header, HTTPException, BackgroundTasks, Request
-from pydantic import BaseModel, field_validator
+from fastapi import FastAPI, Header, HTTPException, BackgroundTasks
+from pydantic import BaseModel, validator
 from typing import List, Optional, Union
 from dotenv import load_dotenv
 
@@ -67,7 +67,7 @@ class Message(BaseModel):
     text: str
     timestamp: Union[int, str, float] = 0
 
-    @field_validator("text")
+    @validator("text")
     @classmethod
     def validate_text(cls, v):
         """Ensure message text is not empty and within size limits."""
@@ -77,7 +77,7 @@ class Message(BaseModel):
             raise ValueError(f"Message text exceeds {MAX_MESSAGE_LENGTH} character limit")
         return v.strip()
 
-    @field_validator("sender")
+    @validator("sender")
     @classmethod
     def validate_sender(cls, v):
         """Validate sender field."""
@@ -100,7 +100,7 @@ class ScamRequest(BaseModel):
     conversationHistory: List[Message] = []
     metadata: Optional[Metadata] = None
 
-    @field_validator("sessionId")
+    @validator("sessionId")
     @classmethod
     def validate_session_id(cls, v):
         """Ensure session ID is provided and not empty."""
