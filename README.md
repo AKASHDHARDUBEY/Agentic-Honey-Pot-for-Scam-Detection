@@ -1,181 +1,87 @@
----
-title: Honeypot Api
-emoji: 🛡️
-colorFrom: blue
-colorTo: gray
-sdk: docker
-pinned: false
----
+# Honeypot API — Agentic Scam Detection & Intelligence Extraction
 
-# 🛡️ Agentic Honey-Pot API
+AI-powered honeypot that detects scams, engages scammers using a believable victim persona, and extracts actionable intelligence.
 
-**AI-powered scam detection and intelligence extraction system for fighting India's ₹60+ Crore daily fraud losses**
+## Description
 
-[![India AI Impact Buildathon 2026](https://img.shields.io/badge/India%20AI%20Impact-Buildathon%202026-blue)](https://guvi.in)
-[![HCL GUVI](https://img.shields.io/badge/Organized%20by-HCL%20GUVI-orange)](https://guvi.in)
-[![Live API](https://img.shields.io/badge/API-Live-green)](https://akashdhar-honeypot-api.hf.space)
-[![Python](https://img.shields.io/badge/Python-3.10-blue)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green)](https://fastapi.tiangolo.com)
+This system acts as a smart scam trap that:
+- **Detects** scam messages using keyword-based pattern matching across 40+ fraud indicators
+- **Engages** scammers with an emotional, confused victim persona (powered by Google Gemini 2.0 Flash)
+- **Extracts** intelligence: phone numbers, UPI IDs, bank accounts, emails, phishing links
+- **Reports** accumulated intelligence to the evaluation endpoint after every conversation turn
 
----
+## Tech Stack
 
-## � Table of Contents
+- **Language**: Python 3.10+
+- **Framework**: FastAPI with Uvicorn ASGI server
+- **AI/LLM**: Google Gemini 2.0 Flash (4-key rotation for high availability)
+- **Deployment**: Hugging Face Spaces (Docker)
+- **Libraries**: Pydantic (validation), Requests (HTTP), python-dotenv (config)
 
-- [Problem Statement](#-problem-statement)
-- [Solution](#-solution)
-- [Tech Stack](#️-tech-stack)
-- [Architecture](#-architecture)
-- [API Documentation](#-api-documentation)
-- [Environment Variables](#-environment-variables)
-- [Installation](#-installation)
-- [Deployment](#-deployment)
-- [Project Structure](#-project-structure)
-- [Features](#-features)
-- [Test Results](#-test-results)
-
----
-
-## 🚨 Problem Statement
-
-### India's Fraud Crisis
-
-| Statistic | Impact |
-|-----------|--------|
-| **5,00,000+** | Scam calls flood India daily |
-| **₹60+ Crore** | Lost to fraudulent calls per day |
-| **3+ Spam Calls** | Per citizen, per day |
-
-Traditional detection systems are ineffective because scammers change tactics based on user responses.
-
-### The Challenge
-
-Build an **Agentic Honey-Pot** — an AI-powered system that:
-- Detects scam intent in messages
-- Engages scammers autonomously using believable human persona
-- Extracts actionable intelligence (bank accounts, UPI IDs, phishing links)
-- Reports findings to evaluation endpoint
-
----
-
-## 🎯 Solution
-
-An autonomous AI honeypot that:
-
-1. **Detects** scam messages using 20+ keyword patterns
-2. **Activates** AI agent with believable naive victim persona
-3. **Engages** scammers in multi-turn conversations (18+ turns)
-4. **Extracts** intelligence: bank accounts, UPI IDs, phone numbers, phishing links
-5. **Reports** findings to GUVI evaluation endpoint automatically
-
----
-
-## 🛠️ Tech Stack
-
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| **Backend Framework** | FastAPI (Python 3.10) | REST API with async support |
-| **AI/LLM** | Google Gemini 2.0 Flash | Intelligent, contextual responses |
-| **Key Management** | Multi-key Rotation (4 keys) | Quota management, 99.9% uptime |
-| **Fallback System** | Rule-based Engine | 40+ varied responses when LLM unavailable |
-| **Deployment** | Docker + Hugging Face Spaces | Serverless container hosting |
-| **Version Control** | GitHub | Code repository |
-
-### Dependencies
+## Architecture
 
 ```
-fastapi>=0.100.0
-uvicorn>=0.22.0
-python-dotenv>=1.0.0
-requests>=2.31.0
-pydantic>=2.0.0
-google-generativeai>=0.3.0
+Request → Authentication → Scam Detector → AI Agent → Intelligence Extractor → GUVI Callback
+                              ↓                ↓              ↓
+                        Keyword Matching   Gemini LLM    Regex Patterns
+                                          (with fallback)
 ```
 
----
+### Module Structure
 
-## 🏗️ Architecture
+| Module | Purpose |
+|--------|---------|
+| `app.py` | FastAPI application, request validation, routing, security |
+| `scam_detector.py` | Keyword-based scam detection across 10+ fraud categories |
+| `agent.py` | Agent bridge — connects LLM responses to the API |
+| `llm.py` | Gemini integration with 4-key rotation + 50+ rule-based fallbacks |
+| `extractor.py` | Regex-based intelligence extraction (phone, UPI, bank, email, links) |
+| `memory.py` | Per-session state management, red flag detection, scam classification |
+| `callback.py` | GUVI evaluation endpoint integration with retry logic |
+| `decision.py` | Callback timing strategy (sends every turn for reliability) |
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Agentic Honey-Pot API                        │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌──────────────┐   ┌──────────────┐   ┌──────────────────────┐ │
-│  │ Scam         │   │ AI Agent     │   │ Intelligence         │ │
-│  │ Detector     │──▶│ (Gemini +    │──▶│ Extractor            │ │
-│  │ (20+ KWs)    │   │ 40+ Fallback)│   │ (Regex Patterns)     │ │
-│  └──────────────┘   └──────────────┘   └──────────────────────┘ │
-│         │                  │                      │             │
-│         ▼                  ▼                      ▼             │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │              Session Memory Manager                       │   │
-│  │        (Multi-turn Conversation Tracking)                 │   │
-│  └──────────────────────────────────────────────────────────┘   │
-│                           │                                     │
-│                           ▼                                     │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │            GUVI Callback Service                          │   │
-│  │   POST hackathon.guvi.in/api/updateHoneyPotFinalResult   │   │
-│  └──────────────────────────────────────────────────────────┘   │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
+## Setup Instructions
 
----
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/AKASHDHARDUBEY/Agentic-Honey-Pot-for-Scam-Detection.git
+   cd Agentic-Honey-Pot-for-Scam-Detection
+   ```
 
-## 📡 API Documentation
+2. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-### Base URL
+3. **Set environment variables**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your API keys
+   ```
 
-```
-https://akashdhar-honeypot-api.hf.space
-```
+4. **Run the application**
+   ```bash
+   python app.py
+   # or
+   uvicorn app:app --host 0.0.0.0 --port 8000
+   ```
 
-### Endpoints
+## API Endpoint
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/` | Health check |
-| `POST` | `/honeypot` | Main scam detection endpoint |
-| `GET` | `/docs` | Swagger UI documentation |
+- **URL**: `https://akashdhar-honeypot-api.hf.space/honeypot`
+- **Method**: POST
+- **Authentication**: `x-api-key` header
 
----
-
-### Authentication
-
-All requests to `/honeypot` require an API key in the header:
-
-```
-x-api-key: YOUR_API_KEY
-Content-Type: application/json
-```
-
----
-
-### POST /honeypot
-
-#### Request Body
-
+### Request Format
 ```json
 {
   "sessionId": "unique-session-id",
   "message": {
     "sender": "scammer",
-    "text": "Your bank account will be blocked. Verify immediately.",
-    "timestamp": 1770005528731
+    "text": "URGENT: Your account is blocked...",
+    "timestamp": "2025-02-11T10:30:00Z"
   },
-  "conversationHistory": [
-    {
-      "sender": "scammer",
-      "text": "Previous message from scammer",
-      "timestamp": 1770005528730
-    },
-    {
-      "sender": "user",
-      "text": "Previous response from honeypot",
-      "timestamp": 1770005528731
-    }
-  ],
+  "conversationHistory": [],
   "metadata": {
     "channel": "SMS",
     "language": "English",
@@ -184,306 +90,47 @@ Content-Type: application/json
 }
 ```
 
-#### Field Descriptions
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `sessionId` | string | ✅ | Unique session identifier |
-| `message.sender` | string | ✅ | `scammer` or `user` |
-| `message.text` | string | ✅ | Message content |
-| `message.timestamp` | number | ✅ | Epoch timestamp in ms |
-| `conversationHistory` | array | ❌ | Previous messages (empty for first) |
-| `metadata.channel` | string | ❌ | SMS / WhatsApp / Email / Chat |
-| `metadata.language` | string | ❌ | Language used |
-| `metadata.locale` | string | ❌ | Country/region code |
-
-#### Response
-
+### Response Format
 ```json
 {
   "status": "success",
-  "reply": "Why is my account being suspended?"
+  "reply": "I am very scared. My bank never calls like this. What is your employee ID?"
 }
 ```
 
----
-
-### GUVI Callback (Automatic)
-
-When sufficient intelligence is gathered, the system automatically sends:
-
-```json
-{
-  "sessionId": "abc123-session-id",
-  "scamDetected": true,
-  "totalMessagesExchanged": 18,
-  "extractedIntelligence": {
-    "bankAccounts": ["1234567890123456"],
-    "upiIds": ["scammer@fakebank"],
-    "phishingLinks": ["http://malicious.com"],
-    "phoneNumbers": ["+91-9876543210"],
-    "suspiciousKeywords": ["urgent", "verify", "blocked"]
-  },
-  "agentNotes": "Scammer used urgency tactics and payment redirection."
-}
-```
-
----
-
-## 🔐 Environment Variables
-
-Create a `.env` file with the following:
-
-```env
-# API Authentication
-API_KEY=your_api_key_here
-
-# Google Gemini API Keys (Multi-key rotation for quota management)
-GEMINI_KEY1=your_gemini_key_1
-GEMINI_KEY2=your_gemini_key_2
-GEMINI_KEY3=your_gemini_key_3
-GEMINI_KEY4=your_gemini_key_4
-
-# Optional: Enable/Disable LLM
-USE_LLM=true
-```
-
-### How to Get API Keys
-
-| Key | Source | Link |
-|-----|--------|------|
-| `GEMINI_KEY` | Google AI Studio | [aistudio.google.com](https://aistudio.google.com/apikey) |
-| `API_KEY` | Self-defined | Any secure string |
-
-### Multi-Key Rotation
-
-The system uses 4 Gemini API keys and rotates through them:
-- If Key 1 hits quota → automatically switches to Key 2
-- If all keys exhausted → uses rule-based fallback (40+ responses)
-- Ensures **99.9% uptime**
-
----
-
-## 💻 Installation
-
-### Local Development
-
-```bash
-# Clone repository
-git clone https://github.com/AKASHDHARDUBEY/Agentic-Honey-Pot-for-Scam-Detection.git
-cd Agentic-Honey-Pot-for-Scam-Detection
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Create .env file with your API keys
-cp .env.example .env
-# Edit .env with your keys
-
-# Run the server
-uvicorn app:app --host 0.0.0.0 --port 8000 --reload
-```
-
-### Test the API
-
-```bash
-curl -X POST "http://localhost:8000/honeypot" \
-  -H "x-api-key: your_api_key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "sessionId": "test-123",
-    "message": {
-      "sender": "scammer",
-      "text": "Your bank account will be blocked. Verify now.",
-      "timestamp": 1770005528731
-    },
-    "conversationHistory": []
-  }'
-```
-
----
-
-## 🚀 Deployment
-
-### Hugging Face Spaces (Docker)
-
-1. **Create Space** on [huggingface.co/spaces](https://huggingface.co/spaces)
-2. **Select Docker SDK**
-3. **Add Secrets** in Settings:
-   - `API_KEY`
-   - `GEMINI_KEY1`, `GEMINI_KEY2`, `GEMINI_KEY3`, `GEMINI_KEY4`
-4. **Push code** to HF repository
-
-### Dockerfile
-
-```dockerfile
-FROM python:3.10-slim
-
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY . .
-
-EXPOSE 7860
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
-```
-
----
-
-## 📂 Project Structure
-
-```
-Agentic-Honey-Pot/
-│
-├── app.py              # FastAPI main application & /honeypot endpoint
-├── agent.py            # AI agent wrapper - connects LLM to API
-├── llm.py              # Gemini integration + 40+ fallback responses
-├── scam_detector.py    # Keyword-based scam detection (20+ keywords)
-├── extractor.py        # Regex-based intelligence extraction
-├── memory.py           # Session memory for multi-turn conversations
-├── decision.py         # Smart callback trigger logic
-├── callback.py         # GUVI endpoint integration
-│
-├── Dockerfile          # Container configuration
-├── requirements.txt    # Python dependencies
-├── .env                # Environment variables (not in git)
-├── .gitignore          # Git ignore rules
-│
-├── README.md           # This file
-└── idea.md             # Detailed project documentation
-```
-
-### Module Descriptions
-
-| File | Purpose |
-|------|---------|
-| `app.py` | FastAPI app, routes, authentication |
-| `agent.py` | Bridges LLM responses to API |
-| `llm.py` | Gemini API + multi-key rotation + 40+ fallbacks |
-| `scam_detector.py` | Detects scam keywords in messages |
-| `extractor.py` | Extracts bank, UPI, phone, links using regex |
-| `memory.py` | Stores conversation history per session |
-| `decision.py` | Decides when to send GUVI callback |
-| `callback.py` | Sends final intelligence to GUVI |
-
----
-
-## ✨ Features
-
-### 1. Scam Detection (20+ Keywords)
-```python
-SCAM_KEYWORDS = [
-    "account blocked", "verify", "urgent", "upi", "bank", 
-    "lottery", "won", "payment", "kyc", "expire", 
-    "pan card", "refund", "suspended", "click here", "prize"
-]
-```
-
-### 2. AI Agent with Human Persona
-- Uses **Google Gemini 2.0 Flash** for intelligent responses
-- Maintains naive, confused victim persona
-- Never reveals scam detection
-
-### 3. Multi-Key Rotation (4 API Keys)
-- Automatic failover when quota exceeded
-- 99.9% uptime guaranteed
-
-### 4. 40+ Fallback Responses (8 Categories)
-| Category | Example Response |
-|----------|-----------------|
-| Link | "The link is not opening on my phone" |
-| Bank | "Which bank is this? I need IFSC code" |
-| UPI | "My GPay is showing error" |
-| OTP | "OTP expired, can you resend?" |
-| Verify | "I am ready to verify. Guide me." |
-| Block | "Why is my account blocked?" |
-| Lottery | "I really won? How much?" |
-| Default | "Please explain, I don't understand" |
-
-### 5. Intelligence Extraction (Regex)
-| Type | Pattern |
-|------|---------|
-| Bank Accounts | 9-18 digit numbers |
-| UPI IDs | `xxx@upi` format |
-| Phone Numbers | +91 format |
-| Phishing Links | HTTP/HTTPS URLs |
-
-### 6. Session Memory
-- Tracks conversation per `sessionId`
-- Cumulative intelligence merging
-- Response variety (no repetition)
-
-### 7. Auto GUVI Callback
-- Triggers after 5+ messages OR valuable intel
-- Sends all extracted data for evaluation
-
----
-
-## 📊 Test Results
-
-### Hackathon Tester Output
-
-```json
-{
-  "scamDetected": true,
-  "totalMessagesExchanged": 18,
-  "extractedIntelligence": {
-    "bankAccounts": ["1234567890123456", "9876543210"],
-    "upiIds": ["scammer.fraud@fakebank"],
-    "phoneNumbers": ["9876543210"],
-    "suspiciousKeywords": ["blocked", "urgent", "expire", "verify", "immediately"]
-  }
-}
-```
-
-### Response Variety (No Repetition)
-
-| Turn | Honeypot Response |
-|------|------------------|
-| 1 | "I received OTP but it says expired. Can you send again?" |
-| 2 | "The OTP is 6 digits right? I got only 4 digits." |
-| 3 | "My message is delayed. Can you resend the OTP please?" |
-| 4 | "I entered the OTP but it shows invalid. New one please?" |
-| 5 | "OTP expired before I could type. Please send new one." |
-
----
-
-## 🔗 Links
-
-| Resource | URL |
-|----------|-----|
-| **Live API** | [akashdhar-honeypot-api.hf.space](https://akashdhar-honeypot-api.hf.space) |
-| **Swagger Docs** | [API Documentation](https://akashdhar-honeypot-api.hf.space/docs) |
-| **GitHub** | [Repository](https://github.com/AKASHDHARDUBEY/Agentic-Honey-Pot-for-Scam-Detection) |
-
----
-
-## 🏆 Hackathon
-
-**India AI Impact Buildathon 2026**  
-- **Organizer:** HCL GUVI  
-- **Prize Pool:** ₹4,00,000  
-- **Final Venue:** Bharat Mandapam, New Delhi  
-- **Certificate:** Co-branded by India AI Impact Summit & HCL GUVI
-
----
-
-## 👨‍💻 Author
-
-**Akash Dhar Dubey**  
-- GitHub: [@AKASHDHARDUBEY](https://github.com/AKASHDHARDUBEY)
-
----
-
-## 📄 License
-
-This project is built for the India AI Impact Buildathon 2026.
-
----
-
-*Built with ❤️ for India's fight against fraud | Fighting ₹60+ Crore daily losses*
+## Approach
+
+### Scam Detection Strategy
+- **40+ keywords** across categories: banking fraud, UPI, phishing, lottery, OTP theft, KYC, insurance
+- Case-insensitive matching with generic patterns (not hardcoded to specific tests)
+
+### Intelligence Extraction
+- **Regex-based** extraction for: phone numbers (Indian +91 format), UPI IDs, bank accounts, email addresses, phishing links
+- Compiled regex patterns for efficient repeated matching
+- Cumulative merging across all conversation turns
+
+### Engagement Strategy (Victim Persona)
+- **Persona**: "Ramesh" — a 55-year-old retired teacher, emotional, confused, not tech-savvy
+- **Red flag surfacing**: Every response mentions suspicious elements naturally
+- **Investigative questions**: Probes for employee ID, phone, email, office address, case numbers
+- **Family references**: "My son told me...", "My wife is worried..."
+- **Emotional tone**: "I am very scared", "Please help me"
+
+### Conversation Quality Maximization
+- **8 response categories** with 50+ unique responses
+- Session-tracked response cycling prevents repetition
+- Each response ends with a question to maintain engagement
+- Layered strategy: Gemini LLM → Rule-based fallback
+
+### LLM Integration
+- **Google Gemini 2.0 Flash** with 4-key rotation
+- Automatic failover: Key 1 → Key 2 → Key 3 → Key 4 → Rule-based fallback
+- Custom system prompt designed for investigation and engagement
+
+## Security
+
+- API key authentication on all endpoints
+- Input validation via Pydantic field validators
+- Message length limits (5000 characters)
+- Exception handling throughout (no crash scenarios)
+- Environment variables for all secrets (`.env.example` provided)

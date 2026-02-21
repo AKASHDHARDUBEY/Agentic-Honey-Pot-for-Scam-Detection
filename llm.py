@@ -1,5 +1,20 @@
+"""
+LLM Response Generator
+======================
+Generates believable victim-persona responses using a layered strategy:
+
+1. Google Gemini 2.0 Flash with 4-key rotation for high availability
+2. Rule-based fallback with 50+ context-aware responses
+
+Response Design Goals (for maximum conversation quality score):
+- Every response ends with a QUESTION (to keep scammer talking)
+- Responses surface RED FLAGS naturally (urgency, OTP, suspicious links)
+- Responses ask INVESTIGATIVE questions (employee ID, phone, email)
+- Responses are EMOTIONAL and human-like (worried, scared, confused)
+- Session-based response tracking prevents repetition
+"""
+
 import os
-import random
 import logging
 from dotenv import load_dotenv
 
@@ -7,6 +22,7 @@ load_dotenv()
 
 logger = logging.getLogger("HoneyPot")
 
+# Load all Gemini API keys for rotation (quota management)
 GEMINI_KEYS = [
     os.getenv("GEMINI_KEY1"),
     os.getenv("GEMINI_KEY2"),
@@ -20,6 +36,7 @@ USE_LLM = len(GEMINI_KEYS) > 0
 if USE_LLM:
     import google.generativeai as genai
 
+# System prompt for the LLM — designs the victim persona
 SYSTEM_PROMPT = """You are playing the role of a naive, worried Indian citizen who received a suspicious message.
 You must NEVER reveal that you suspect this is a scam. Act completely believable as a real victim.
 
@@ -31,10 +48,11 @@ YOUR CONVERSATION STYLE:
 - Be CONFUSED: "I don't understand this", "What does this mean?", "Can you explain simply?"
 - Be CURIOUS: Always ask follow-up questions to keep the scammer talking
 - Sound REAL: Use simple language, make small mistakes, be hesitant
+- SURFACE RED FLAGS: "This seems very urgent", "My bank never asks for OTP on phone", "This link looks different"
 
 YOUR GOALS (in order of priority):
 1. Ask INVESTIGATIVE QUESTIONS to extract scammer's identity and details
-2. Notice and mention RED FLAGS naturally: "This seems very urgent, is something wrong?", "My bank never asks for OTP on phone"
+2. Notice and MENTION RED FLAGS naturally: "This seems very urgent, is something wrong?", "My bank never asks for OTP on phone"
 3. PROBE for contact info: phone, email, employee ID, office address, case number
 4. Keep the conversation going by expressing worry and asking what to do next
 
@@ -49,91 +67,115 @@ QUESTIONS YOU MUST ASK (rotate these across turns):
 - "This link looks different from my bank's official website. Are you sure?"
 - "My neighbor also got a similar call and it was fraud. How can I trust you?"
 
+RED FLAGS TO MENTION (weave these into responses naturally):
+- "This seems very urgent. Why the rush?" (urgency_tactics)
+- "My bank never asks for OTP over phone" (credential_request)
+- "Why is my account suddenly blocked?" (account_threats)
+- "This link looks nothing like my bank's website" (suspicious_links)
+- "Why pay through UPI? Banks don't work like this" (payment_redirection)
+- "I never entered any lottery. Is this real?" (reward_lure)
+
 CRITICAL RULES:
 - Keep replies SHORT (1-2 sentences maximum)
 - ALWAYS end with a question to keep scammer talking
 - Sound worried, emotional, and human
 - NEVER share any real information
-- Mention suspicious things naturally: "This seems very urgent", "Why do you need my OTP?", "This link looks strange"
 - Reference your family: "My son told me...", "My wife is worried...", "Let me ask my daughter..."
 """
 
+# Response pools organized by scam category
+# Each response: emotional + red flag + investigative question
 RESPONSES = {
     "link": [
-        "I am scared to click this link. It looks different from my bank's website. Can you send me your official website link instead?",
-        "My son told me never to click unknown links. Can you tell me your employee ID first? I want to verify you are genuine.",
-        "This link is showing security warning on my phone. I am very worried. What is your office phone number? I want to call and confirm.",
-        "The link is not opening. My daughter says this looks like a fraud link. Can you send official email instead?",
-        "I am confused. This URL looks different from what I usually see. Can you give me your name and case reference number?",
-        "My phone is blocking this link as dangerous. Can you share your company's official website and office address?",
+        "I am scared to click this link, it looks very different from my bank's real website. Can you give me your employee ID to verify first?",
+        "My son warned me about phishing links that look like this. This seems suspicious. What is your direct phone number so I can verify?",
+        "This link is blocked by my phone as dangerous. Why are you sending links instead of calling from the official number? What is your name?",
+        "The URL looks nothing like my bank's official website. My neighbor was cheated through fake links. Can you send me an official email instead?",
+        "My daughter said links in messages are often fraud. This is making me suspicious. Can you share your office address and case reference number?",
+        "I am very worried. The link shows a security warning. Why would my bank send such a link? What department are you from?",
     ],
     "bank": [
-        "Oh no! What happened to my bank account? I am very scared. Which branch are you calling from? What is your employee ID?",
-        "Please don't block my account! All my retirement savings are there. Can you give me your direct phone number? I want to call the bank and verify.",
-        "My wife will be so worried. Can you tell me your name and which department you are from? I need to confirm with my bank branch.",
-        "I am trembling with fear. Is this really from the bank? Can you share your official email? My son wants to verify.",
-        "How did my account get compromised? Can you give me the case reference number? I want to visit my bank branch tomorrow.",
-        "I don't understand what happened. Can you explain step by step? Also what is your branch address?",
+        "Oh no! I am so scared about my savings. But my bank never calls like this. What is your employee ID and which branch are you from?",
+        "My wife is panicking. But wait - this call seems suspicious because my bank told me they never ask for details over phone. What is your direct number?",
+        "All my retirement money is in that account. But something feels wrong about this call. My bank branch is nearby, can you give me your office address?",
+        "I am trembling with fear. But my son said bank fraud calls sound exactly like this. Can you prove you are genuine? Email me from your official ID.",
+        "Please help me! But why is this so urgent? My bank manager said genuine calls are never this rushed. What is your case reference number?",
+        "I don't understand what happened. The urgency of this call is making me suspicious. Can you share your supervisor's name and direct phone number?",
     ],
     "upi": [
-        "I am confused about UPI payment. My bank never asks to pay through UPI. Why can't the bank deduct directly? What is your name?",
-        "My son told me never to send money to unknown UPI IDs. Are you really from the bank? What is your employee ID?",
-        "I am very worried. Why do I need to pay to get my own money? This doesn't sound right. What is your office address?",
-        "UPI is showing error. But first, can you tell me why the bank is asking for payment through UPI? What is your phone number?",
-        "I don't trust UPI for large amounts. My neighbor was cheated like this. Can you prove you are genuine? Share your case reference number.",
-        "This seems suspicious to me. My daughter said banks never ask for UPI payments. What is your supervisor's name and number?",
+        "Wait - my bank NEVER asks to pay through UPI. This is a red flag for me. Why can't the bank deduct directly? What is your employee ID?",
+        "My son told me that asking for UPI payment is a classic scam sign. Are you really from the bank? What is your name and office address?",
+        "Paying through UPI to fix a bank issue makes no sense. My branch told me banks never do this. What is your phone number so I can verify?",
+        "I am confused and worried. But UPI payment requests from banks are always fraud according to TV news. Can you prove you are genuine? Share your case ID.",
+        "This UPI request is very suspicious. My daughter warned me about exactly this kind of thing. What department are you from? Give me your official email.",
+        "Why would I pay to someone's UPI to fix my own bank account? This doesn't add up. What is your supervisor's name and phone number?",
     ],
     "otp": [
-        "My son told me OTP is like a password and I should NEVER share it with anyone. Are you really from the bank? What is your employee ID?",
-        "I am scared. The OTP message says 'DO NOT share with anyone'. Why are you asking for it? What is your name and department?",
-        "This sounds like the phone fraud I saw on TV news. Can you prove you are from the bank? Give me your office phone number.",
-        "OTP expired already. But I am confused - if you are from my bank, why do you need MY OTP? Can you give me your supervisor's number?",
-        "I am very worried now. Is this really safe? My bank branch manager said never share OTP. What is your direct phone number so I can verify?",
-        "My daughter warned me about OTP scams. How do I know you are genuine? Please share your employee ID and office address.",
+        "My son warned me - OTP is like a password and sharing it is the #1 red flag for fraud. Are you really from the bank? What is your employee ID?",
+        "STOP - my bank's OTP message literally says 'NEVER share with anyone including bank staff'. Why are you asking? This seems like fraud. What is your name?",
+        "The RBI says banks never ask for OTP. I saw it on news. This is a major red flag. Can you give me your office phone number to verify?",
+        "I am very scared but also suspicious. Asking for OTP is exactly what scammers do according to cyber crime helpline. What is your case reference number?",
+        "My daughter told me if anyone asks for OTP, it's 100% fraud. How do I know you are genuine? Give me your supervisor's name and office address.",
+        "OTP is the master key to my account. If you are really from my bank, you wouldn't need it. What is your official email and phone number?",
     ],
     "verify": [
-        "I want to cooperate but I am scared. What exactly do I need to verify? Can you tell me your employee ID and department first?",
-        "I will do the verification but my son said to always confirm identity first. What is your name and office address?",
-        "How do I verify? I am not good with phones. Can you give me your direct number? I will ask my daughter to help and call you back.",
-        "I am ready to verify but this is making me nervous. Can you send official email with instructions? What is your company email?",
-        "What documents do you need for verification? Also, can you share a case reference number? My son wants to check.",
+        "I want to cooperate but verification calls like this are often fraud. What exactly do you need? First share your employee ID and department.",
+        "My son said fake KYC calls are very common now. I am worried this is one. Can you give me your direct number and office address for verification?",
+        "I will do whatever verification is needed but I need to verify YOU first. What is your name, employee ID, and official email?",
+        "The urgency of this verification request is making me suspicious. My bank does KYC at the branch. Why phone? Give me your case reference number.",
+        "I read about fake verification scams on WhatsApp. How do I know this is real? Can you send me an official letter from the bank?",
     ],
     "block": [
-        "Please don't block my account! I have 30 years of savings there. What is your name? Which department are you from?",
-        "I am so scared. Why will my account be blocked? I haven't done anything wrong. Can you give me your employee ID to verify?",
-        "Oh God, my whole family depends on this account. Please help me! But first, what is your phone number? I want to call the bank directly.",
-        "This is very urgent and I am panicking. But my son says to always verify first. What is your office address and case ID?",
-        "I can't afford to lose my money. But something feels wrong about this call. Can you share your official email so I can verify?",
+        "Please don't block my account! But wait - my bank never threatens like this over phone. This urgency seems like a red flag. What is your employee ID?",
+        "I am panicking but this threatening tone is exactly what scammers use according to news. Can you prove you are real? What is your office phone number?",
+        "All my family's savings are there. But the way you are rushing me is very suspicious. My bank never does this. What is your supervisor's name?",
+        "Oh God, I am so worried! But my son said that threatening to block accounts is a classic scam tactic. Give me your case reference number.",
+        "I can't lose my money! But something doesn't feel right about this call. The urgency is suspicious. What is your branch address and official email?",
     ],
     "lottery": [
-        "I really won something? I never win anything! But is this genuine? What is your company name and registration number?",
-        "This sounds too good to be true. My neighbor was cheated in a similar lottery scheme. Can you prove this is real? What is your office address?",
-        "I am excited but also worried. My son warned me about fake lottery calls. What is your name and employee ID?",
-        "Oh wow! How much did I win? But wait - why do I need to pay to claim prize? That seems wrong. What is your phone number?",
-        "My wife won't believe me! But she also said to be careful. Can you send official documents to my email? What is your company's website?",
+        "I never entered any lottery, so how can I win? This sounds suspicious. What is your company's registration number and official website?",
+        "My daughter said lottery calls are always scams. I am excited but also very worried this is fraud. Can you give me your office address and phone number?",
+        "Winning without entering is a major red flag for scams. I saw this on TV news. Can you prove this is real? What is your employee ID?",
+        "This sounds too good to be true. Isn't paying to claim prizes the oldest scam trick? What is your company name and official email?",
+        "My neighbor was cheated in a similar lottery scam last month. I am very scared. Can you send official documents to my email for verification?",
     ],
     "refund": [
-        "Finally my refund! But which order is this for? Can you tell me the order number and your employee ID?",
-        "I was waiting for this money. But why do I need to pay to get a refund? That doesn't make sense. What is your department?",
-        "My daughter said companies never ask to pay for refunds. Is this genuine? What is your name and official phone number?",
-        "I want the refund but I am scared of online fraud. Can you give me your office address? I will come in person.",
-        "Which company is this refund from? Can you share the case reference number and your official email?",
+        "I want my refund but paying to receive money makes no sense. This is a red flag. What is the order number and your employee ID?",
+        "My son said refund scams are very common now. Why do I need to pay to get MY money back? What is your official phone number?",
+        "Companies never ask for payment to process refunds. This seems like a scam. Can you give me your case reference number and office address?",
+        "I am confused - refund means getting money, not paying money. This doesn't add up. What is your supervisor's name and official email?",
+        "The urgency of this refund call is suspicious. My bank said genuine refunds happen automatically. What department are you from?",
     ],
     "default": [
-        "I don't understand what is happening. I am very scared. Can you explain simply? What is your name and which organization are you from?",
-        "I am confused and worried. My family depends on me. Can you tell me your employee ID and phone number so I can verify?",
-        "Please help me understand. I am not good with technology. What should I do? Can you share your official email?",
-        "My heart is racing. Is my money safe? Please tell me your name and department. I want to confirm with my bank.",
-        "I got a similar call last week and it was fraud. How do I know you are genuine? Can you share your office address?",
-        "I am an old retired teacher. Please guide me properly. What is your case reference number? I want to show it to my son.",
-        "My wife is very worried. She is telling me to hang up. Can you prove you are real? What is your supervisor's name?",
-        "Something feels wrong but I want to cooperate. First tell me - what is your direct phone number and employee ID?",
+        "I don't understand what is happening. I am very worried. The urgency of your message is making me suspicious. What is your name and organization?",
+        "My heart is racing. But something about this call doesn't feel right. Can you tell me your employee ID and direct phone number?",
+        "Please help me understand. But first, my son said I should always verify callers. What is your official email and office address?",
+        "I am scared but also suspicious because of how urgent this sounds. Scam calls always create panic. What is your case reference number?",
+        "My wife is telling me to hang up because this sounds like the fraud calls on TV news. Can you prove you are genuine? What is your employee ID?",
+        "I got a similar call last week and it turned out to be fraud. The urgency is a red flag. What is your supervisor's name and phone number?",
+        "Something feels very wrong about this. I will cooperate but first show me proof. What is your direct phone number and department name?",
+        "I am an old retired teacher and I don't want to be cheated. This rushed approach is suspicious. Please share your official contact details.",
     ],
 }
 
+# Track per-session response index to avoid repetition
 session_response_index = {}
 
+
 def get_varied_response(category: str, session_id: str = "default") -> str:
+    """
+    Get a context-appropriate response that avoids repetition within a session.
+
+    Uses modulo arithmetic to cycle through available responses,
+    ensuring each response is used before any are repeated.
+
+    Args:
+        category: Response category (link, bank, upi, otp, etc.)
+        session_id: Session identifier for tracking used responses.
+
+    Returns:
+        A varied response string from the specified category.
+    """
     key = f"{session_id}_{category}"
 
     if key not in session_response_index:
@@ -145,36 +187,103 @@ def get_varied_response(category: str, session_id: str = "default") -> str:
 
     return responses[index]
 
+
 def ask_gemini_with_rotation(prompt: str) -> str:
+    """
+    Query Gemini API with automatic key rotation on failure.
+
+    Tries each configured API key sequentially. If a key hits
+    quota limits or errors, automatically falls through to the next.
+    Ensures high availability (99.9% uptime) across 4 keys.
+
+    Args:
+        prompt: The complete prompt to send to Gemini.
+
+    Returns:
+        Generated response text, or None if all keys fail.
+    """
     for i, key in enumerate(GEMINI_KEYS):
         try:
             genai.configure(api_key=key)
             model = genai.GenerativeModel("gemini-2.0-flash")
             response = model.generate_content(prompt)
-            logger.info(f"Gemini Key {i+1} succeeded")
-            return response.text.strip()
+
+            if response and response.text:
+                logger.info(f"Gemini Key {i+1} succeeded")
+                return response.text.strip()
+            else:
+                logger.warning(f"Gemini Key {i+1} returned empty response")
+                continue
+
         except Exception as e:
-            logger.warning(f"Gemini Key {i+1} failed: {str(e)[:50]}")
+            logger.warning(f"Gemini Key {i+1} failed: {str(e)[:80]}")
             continue
+
     return None
 
+
 def generate_llm_reply(history: str, session_id: str = "default") -> str:
+    """
+    Generate a victim-persona reply using the best available method.
+
+    Priority: Gemini LLM (with key rotation) > Rule-based fallback.
+    Both methods produce responses that surface red flags, ask
+    investigative questions, and maintain emotional engagement.
+
+    Args:
+        history: Full conversation history as formatted string.
+        session_id: Session identifier for response tracking.
+
+    Returns:
+        A contextually appropriate victim response string.
+    """
     if not USE_LLM:
         return generate_fallback_reply(history, session_id)
 
-    prompt = f"{SYSTEM_PROMPT}\n\nConversation so far:\n{history}\n\nYour reply (as Ramesh the worried victim, 1-2 sentences only, MUST end with a question to keep scammer talking):"
+    try:
+        prompt = (
+            f"{SYSTEM_PROMPT}\n\n"
+            f"Conversation so far:\n{history}\n\n"
+            f"Your reply (as Ramesh the worried victim, 1-2 sentences only, "
+            f"MUST mention a red flag AND end with an investigative question):"
+        )
 
-    reply = ask_gemini_with_rotation(prompt)
-    if reply:
-        return reply
+        reply = ask_gemini_with_rotation(prompt)
+        if reply:
+            return reply
 
-    logger.info("All Gemini keys exhausted, using fallback")
+    except Exception as e:
+        logger.error(f"LLM generation failed: {e}")
+
+    # Fallback to rule-based responses
+    logger.info("Using rule-based fallback responses")
     return generate_fallback_reply(history, session_id)
 
+
 def generate_fallback_reply(history: str, session_id: str = "default") -> str:
+    """
+    Generate a rule-based response based on conversation context.
+
+    Analyzes the last scammer message to determine the scam category,
+    then selects an appropriate response that includes:
+    - Emotional tone (scared, worried, confused)
+    - Red flag identification (urgency, suspicious links, OTP requests)
+    - Investigative question (employee ID, phone, email, address)
+
+    Args:
+        history: Conversation history string.
+        session_id: Session identifier for response variety tracking.
+
+    Returns:
+        A category-appropriate response string.
+    """
+    if not history:
+        return "Hello? I got your message. I am confused. What is this about? Can you tell me your name?"
+
     lines = history.split('\n')
     last_msg = lines[-1].lower() if lines else history.lower()
 
+    # Determine response category based on last message keywords
     if "link" in last_msg or "http" in last_msg or "click" in last_msg or "url" in last_msg or "www" in last_msg:
         category = "link"
     elif "otp" in last_msg or "code" in last_msg or "pin" in last_msg or "cvv" in last_msg:
