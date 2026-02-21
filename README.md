@@ -1,3 +1,12 @@
+---
+title: Honeypot Api
+emoji: 🛡️
+colorFrom: red
+colorTo: blue
+sdk: docker
+pinned: false
+---
+
 # Honeypot API — Agentic Scam Detection & Intelligence Extraction
 
 AI-powered honeypot that detects scams, engages scammers using a believable victim persona, and extracts actionable intelligence.
