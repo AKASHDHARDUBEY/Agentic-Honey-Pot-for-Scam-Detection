@@ -2,14 +2,15 @@ import os
 import logging
 from fastapi import FastAPI, Header, HTTPException, BackgroundTasks
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Union
 from dotenv import load_dotenv
 
 from scam_detector import detect_scam
 from agent import generate_agent_reply
 from memory import (
-    add_message, get_history, get_message_count, 
-    get_intelligence, mark_scam_detected, is_scam_detected
+    add_message, get_history, get_message_count,
+    get_intelligence, mark_scam_detected, is_scam_detected,
+    get_engagement_duration, get_scam_type, get_red_flags
 )
 from decision import should_send_callback
 from callback import send_final_callback
@@ -30,7 +31,7 @@ app = FastAPI(
 class Message(BaseModel):
     sender: str
     text: str
-    timestamp: int
+    timestamp: Union[int, str, float] = 0
 
 class Metadata(BaseModel):
     channel: Optional[str] = "SMS"
@@ -59,40 +60,46 @@ async def honeypot_endpoint(
 ):
     if x_api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Invalid API key")
-    
+
     session_id = request.sessionId
     current_text = request.message.text
     sender = request.message.sender
-    
+
     add_message(session_id, sender, current_text)
-    
+
     scam_detected = detect_scam(current_text)
     already_detected = is_scam_detected(session_id)
-    
+
     if scam_detected and not already_detected:
         mark_scam_detected(session_id)
         logger.info(f"Session {session_id}: Scam detected!")
-    
+
     if scam_detected or already_detected or len(request.conversationHistory) > 0:
         history = get_history(session_id)
         reply = generate_agent_reply(history, session_id)
-        
+
         add_message(session_id, "user", reply)
-        
+
         message_count = get_message_count(session_id)
         intelligence = get_intelligence(session_id)
-        
+        engagement_duration = get_engagement_duration(session_id)
+        scam_type = get_scam_type(session_id)
+        red_flags = get_red_flags(session_id)
+
         if should_send_callback(message_count, intelligence):
             background_tasks.add_task(
                 send_final_callback,
                 session_id,
                 intelligence,
-                message_count
+                message_count,
+                engagement_duration,
+                scam_type,
+                red_flags
             )
-            logger.info(f"Session {session_id}: Callback scheduled")
-        
+            logger.info(f"Session {session_id}: Callback sent (turn {message_count})")
+
         return AgentResponse(status="success", reply=reply)
-    
+
     return AgentResponse(status="success", reply="Hello! How can I help you?")
 
 if __name__ == "__main__":
